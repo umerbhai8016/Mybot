@@ -1,23 +1,22 @@
 <!DOCTYPE html>
 <html lang="en" class="h-full">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-  <title>TitanAI Chat</title>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>TitanAI Chat</title>
 
-  <!-- Tailwind CSS CDN -->
-  <script src="https://cdn.tailwindcss.com"></script>
+<!-- Tailwind CSS CDN -->
+<script src="https://cdn.tailwindcss.com"></script>
+<!-- Marked.js CDN -->
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 
-  <!-- Marked.js CDN -->
-  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
-
-  <style>
-    html, body { min-height: 100%; }
-    pre { background:#111; color:#eee; padding:12px; border-radius:8px; overflow-x:auto; }
-    .dark pre { background:#000; }
-    #sidebar { transition: transform 0.3s ease; }
-    .sidebar-hidden { transform: translateX(-100%); }
-  </style>
+<style>
+html, body { min-height: 100%; }
+pre { background:#111; color:#eee; padding:12px; border-radius:8px; overflow-x:auto; }
+.dark pre { background:#000; }
+#sidebar { transition: transform 0.3s ease; }
+.sidebar-hidden { transform: translateX(-100%); }
+</style>
 </head>
 <body class="bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100 min-h-screen flex">
 
@@ -28,9 +27,13 @@
 
 <!-- Sidebar -->
 <div id="sidebar" class="fixed md:static z-40 w-72 bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 flex flex-col min-h-screen">
-  <div class="p-4 border-b dark:border-gray-700 font-bold text-lg">TitanAI</div>
+  <div class="p-4 border-b dark:border-gray-700 flex justify-between items-center font-bold text-lg">
+    TitanAI
+    <button id="closeSidebar" class="md:hidden text-xl">✕</button>
+  </div>
   <div id="chatList" class="flex-1 overflow-y-auto"></div>
   <div class="p-3 border-t dark:border-gray-700 space-y-2">
+    <button id="settingsBtn" class="w-full bg-gray-200 dark:bg-gray-700 p-2 rounded">Settings</button>
     <button id="darkToggle" class="w-full bg-gray-200 dark:bg-gray-700 p-2 rounded">Toggle Dark Mode</button>
   </div>
 </div>
@@ -57,6 +60,24 @@
     </div>
   </div>
 
+</div>
+
+<!-- Settings Modal -->
+<div id="settingsModal" class="fixed inset-0 bg-black bg-opacity-40 hidden items-center justify-center">
+  <div class="bg-white dark:bg-gray-800 p-6 rounded w-96 space-y-4">
+    <h2 class="text-lg font-semibold">Settings</h2>
+    <input id="modelInput" type="text"
+      value="deepseek/deepseek-r1:free"
+      class="w-full p-2 border rounded dark:bg-gray-700"
+      placeholder="Model name">
+    <textarea id="systemPromptInput" rows="3"
+      placeholder="System Prompt..."
+      class="w-full p-2 border rounded dark:bg-gray-700"></textarea>
+    <div class="flex justify-end gap-2">
+      <button id="saveSettings" class="bg-blue-500 text-white px-4 py-1 rounded">Save</button>
+      <button id="closeSettings" class="bg-gray-400 px-4 py-1 rounded">Cancel</button>
+    </div>
+  </div>
 </div>
 
 <script>
@@ -103,8 +124,32 @@ function renderChats(){
   chatList.innerHTML = "";
   chats.forEach(chat=>{
     const div = document.createElement("div");
-    div.className = "p-3 border-b dark:border-gray-700 cursor-pointer";
-    div.textContent = chat.name;
+    div.className = "p-3 border-b dark:border-gray-700 cursor-pointer flex justify-between items-center";
+    div.innerHTML = `<span>${chat.name}</span>
+      <div class="flex gap-2">
+        <button data-rename="${chat.id}">✏️</button>
+        <button data-delete="${chat.id}">🗑️</button>
+      </div>`;
+    div.onclick = e=>{
+      if(e.target.dataset.rename){
+        const name = prompt("Rename chat:", chat.name);
+        if(name){ chat.name=name; saveState(); renderChats(); }
+        return;
+      }
+      if(e.target.dataset.delete){
+        if(confirm("Delete chat?")){
+          chats = chats.filter(c=>c.id!==chat.id);
+          if(currentChatId===chat.id){ currentChatId=chats[0]?.id||null; }
+          saveState();
+          renderChats();
+          renderMessages();
+        }
+        return;
+      }
+      currentChatId = chat.id;
+      saveState();
+      renderMessages();
+    };
     chatList.appendChild(div);
   });
 }
@@ -159,7 +204,7 @@ async function sendMessage(){
         "Content-Type":"application/json"
       },
       body:JSON.stringify({
-        model:"deepseek/deepseek-r1:free",
+        model:document.getElementById("modelInput").value,
         stream:true,
         messages:[
           ...(chat.systemPrompt? [{role:"system",content:chat.systemPrompt}]: []),
@@ -194,18 +239,35 @@ async function sendMessage(){
 
 // --- Events ---
 document.getElementById("sendBtn").onclick = sendMessage;
-userInput.addEventListener("keydown",e=>{
+userInput.addEventListener("keydown", e=>{
   if(e.key==="Enter" && !e.shiftKey){ e.preventDefault(); sendMessage(); }
 });
 
 // Sidebar toggle
 document.getElementById("openSidebar").onclick = ()=>{ document.getElementById("sidebar").classList.remove("sidebar-hidden"); };
+document.getElementById("closeSidebar").onclick = ()=>{ document.getElementById("sidebar").classList.add("sidebar-hidden"); };
 if(window.innerWidth<768) document.getElementById("sidebar").classList.add("sidebar-hidden");
 
-// Dark Mode Toggle
+// Dark Mode
 document.getElementById("darkToggle").onclick = ()=>{
   document.documentElement.classList.toggle("dark");
   localStorage.setItem("darkMode", document.documentElement.classList.contains("dark"));
+};
+
+// Settings
+document.getElementById("settingsBtn").onclick = ()=>{
+  const chat = getCurrentChat();
+  document.getElementById("systemPromptInput").value = chat?.systemPrompt || "";
+  document.getElementById("settingsModal").classList.remove("hidden");
+};
+document.getElementById("closeSettings").onclick = ()=>{
+  document.getElementById("settingsModal").classList.add("hidden");
+};
+document.getElementById("saveSettings").onclick = ()=>{
+  const chat = getCurrentChat();
+  if(chat) chat.systemPrompt = document.getElementById("systemPromptInput").value;
+  saveState();
+  document.getElementById("settingsModal").classList.add("hidden");
 };
 
 // --- Init ---
