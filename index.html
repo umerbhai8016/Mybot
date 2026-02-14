@@ -1,8 +1,8 @@
 <!DOCTYPE html>
 <html lang="en" class="h-full">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <title>Universal AI Chat</title>
 
   <!-- Tailwind CDN -->
@@ -12,31 +12,17 @@
   <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 
   <style>
-    html, body {
-      min-height: 100%;
-    }
-    pre {
-      background: #111;
-      color: #eee;
-      padding: 12px;
-      border-radius: 8px;
-      overflow-x: auto;
-    }
-    .dark pre {
-      background: #000;
-    }
-    #sidebar {
-      transition: transform 0.3s ease;
-    }
-    .sidebar-hidden {
-      transform: translateX(-100%);
-    }
+    html, body { min-height: 100%; }
+    pre { background: #111; color:#eee; padding:12px; border-radius:8px; overflow-x:auto; }
+    .dark pre { background: #000; }
+    #sidebar { transition: transform 0.3s ease; }
+    .sidebar-hidden { transform: translateX(-100%); }
   </style>
 </head>
 
 <body class="bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100 min-h-screen flex">
 
-<!-- Fallback Loader -->
+<!-- Loader -->
 <div id="loading" class="fixed inset-0 flex items-center justify-center bg-white dark:bg-gray-900 z-50">
   Loading App...
 </div>
@@ -72,8 +58,7 @@
       <textarea id="userInput" rows="1"
         class="flex-1 resize-none p-2 border rounded dark:bg-gray-800"
         placeholder="Type your message..."></textarea>
-      <button id="sendBtn"
-        class="bg-blue-500 text-white px-4 rounded">Send</button>
+      <button id="sendBtn" class="bg-blue-500 text-white px-4 rounded">Send</button>
     </div>
   </div>
 
@@ -102,11 +87,8 @@
 (function(){
 
 // Hide Loader
-function initApp(){
-  const loader = document.getElementById("loading");
-  if(loader) loader.style.display = "none";
-}
-initApp();
+const loader = document.getElementById("loading");
+if(loader) loader.style.display = "none";
 
 // State
 let chats = JSON.parse(localStorage.getItem("chats") || "[]");
@@ -114,7 +96,6 @@ let currentChatId = localStorage.getItem("currentChatId");
 let apiKey = localStorage.getItem("apiKey") || "";
 let model = localStorage.getItem("model") || "deepseek/deepseek-r1:free";
 let darkMode = localStorage.getItem("darkMode") === "true";
-
 if(darkMode) document.documentElement.classList.add("dark");
 
 // DOM
@@ -130,12 +111,7 @@ function saveState(){
 
 function createChat(){
   const id = Date.now().toString();
-  const chat = {
-    id,
-    name: "New Chat",
-    messages: [],
-    systemPrompt: ""
-  };
+  const chat = { id, name:"New Chat", messages:[], systemPrompt:"" };
   chats.unshift(chat);
   currentChatId = id;
   saveState();
@@ -162,19 +138,13 @@ function renderChats(){
     div.onclick = (e)=>{
       if(e.target.dataset.rename){
         const name = prompt("Rename chat:", chat.name);
-        if(name){
-          chat.name = name;
-          saveState();
-          renderChats();
-        }
+        if(name){ chat.name=name; saveState(); renderChats(); }
         return;
       }
       if(e.target.dataset.delete){
         if(confirm("Delete chat?")){
-          chats = chats.filter(c=>c.id !== chat.id);
-          if(currentChatId === chat.id){
-            currentChatId = chats[0]?.id || null;
-          }
+          chats = chats.filter(c=>c.id!==chat.id);
+          if(currentChatId===chat.id){ currentChatId=chats[0]?.id||null; }
           saveState();
           renderChats();
           renderMessages();
@@ -195,11 +165,9 @@ function renderMessages(){
   if(!chat) return;
   chat.messages.forEach(msg=>{
     const div = document.createElement("div");
-    div.className = msg.role === "user"
-      ? "text-right"
-      : "text-left";
+    div.className = msg.role==="user"?"text-right":"text-left";
     const bubble = document.createElement("div");
-    bubble.className = msg.role === "user"
+    bubble.className = msg.role==="user"
       ? "inline-block bg-blue-500 text-white p-3 rounded-lg max-w-[80%]"
       : "inline-block bg-gray-200 dark:bg-gray-700 p-3 rounded-lg max-w-[80%]";
     bubble.innerHTML = marked.parse(msg.content || "");
@@ -209,38 +177,48 @@ function renderMessages(){
   messagesDiv.scrollTop = messagesDiv.scrollHeight;
 }
 
-// Streaming
+// Send Message
 async function sendMessage(){
-  if(!apiKey){
-    alert("Set API key in settings.");
-    return;
-  }
-  const chat = getCurrentChat();
-  if(!chat) return;
-
   const content = userInput.value.trim();
   if(!content) return;
   userInput.value = "";
+  const chat = getCurrentChat();
+  if(!chat) return;
+
+  // ✅ Hardcoded developer reply
+  const lower = content.toLowerCase();
+  if (
+    lower.includes("who is your developer") ||
+    lower.includes("who created you") ||
+    lower.includes("who is your owner") ||
+    lower.includes("who made you")
+  ) {
+    chat.messages.push({role:"assistant", content:"UMER Bhai is my developer."});
+    chat.messages.push({role:"user", content:content});
+    renderMessages();
+    saveState();
+    return;
+  }
 
   chat.messages.push({role:"user", content});
-  renderMessages();
-
   const aiMsg = {role:"assistant", content:""};
   chat.messages.push(aiMsg);
   renderMessages();
+
+  if(!apiKey){ alert("Set API key in settings."); return; }
 
   try{
     const response = await fetch("https://openrouter.ai/api/v1/chat/completions",{
       method:"POST",
       headers:{
-        "Authorization":"Bearer " + apiKey,
+        "Authorization":"Bearer "+apiKey,
         "Content-Type":"application/json"
       },
       body:JSON.stringify({
         model,
         stream:true,
         messages:[
-          ...(chat.systemPrompt ? [{role:"system",content:chat.systemPrompt}] : []),
+          ...(chat.systemPrompt? [{role:"system", content:chat.systemPrompt}]: []),
           ...chat.messages.filter(m=>m.role!=="assistant" || m.content)
         ]
       })
@@ -249,58 +227,43 @@ async function sendMessage(){
     const reader = response.body.getReader();
     const decoder = new TextDecoder();
     while(true){
-      const {done, value} = await reader.read();
+      const {done,value} = await reader.read();
       if(done) break;
       const chunk = decoder.decode(value);
       const lines = chunk.split("\n").filter(l=>l.startsWith("data:"));
       for(const line of lines){
         const json = line.replace("data:","").trim();
-        if(json === "[DONE]") break;
+        if(json==="[DONE]") break;
         try{
           const data = JSON.parse(json);
           const token = data.choices?.[0]?.delta?.content;
-          if(token){
-            aiMsg.content += token;
-            renderMessages();
-          }
+          if(token){ aiMsg.content += token; renderMessages(); }
         }catch{}
       }
     }
-
     saveState();
-
   }catch(e){
-    aiMsg.content = "Error: " + e.message;
+    aiMsg.content="Error: "+e.message;
     renderMessages();
   }
 }
 
 // Events
-document.getElementById("newChatBtn").onclick = createChat;
-document.getElementById("sendBtn").onclick = sendMessage;
+document.getElementById("newChatBtn").onclick=createChat;
+document.getElementById("sendBtn").onclick=sendMessage;
 userInput.addEventListener("keydown",e=>{
-  if(e.key==="Enter" && !e.shiftKey){
-    e.preventDefault();
-    sendMessage();
-  }
+  if(e.key==="Enter" && !e.shiftKey){ e.preventDefault(); sendMessage(); }
 });
 
 // Sidebar toggle
-document.getElementById("openSidebar").onclick = ()=>{
-  document.getElementById("sidebar").classList.remove("sidebar-hidden");
-};
-document.getElementById("closeSidebar").onclick = ()=>{
-  document.getElementById("sidebar").classList.add("sidebar-hidden");
-};
-if(window.innerWidth < 768){
-  document.getElementById("sidebar").classList.add("sidebar-hidden");
-}
+document.getElementById("openSidebar").onclick = ()=>{ document.getElementById("sidebar").classList.remove("sidebar-hidden"); };
+document.getElementById("closeSidebar").onclick = ()=>{ document.getElementById("sidebar").classList.add("sidebar-hidden"); };
+if(window.innerWidth<768) document.getElementById("sidebar").classList.add("sidebar-hidden");
 
 // Dark mode
 document.getElementById("darkToggle").onclick = ()=>{
   document.documentElement.classList.toggle("dark");
-  localStorage.setItem("darkMode",
-    document.documentElement.classList.contains("dark"));
+  localStorage.setItem("darkMode", document.documentElement.classList.contains("dark"));
 };
 
 // Settings
@@ -308,18 +271,17 @@ document.getElementById("settingsBtn").onclick = ()=>{
   document.getElementById("settingsModal").classList.remove("hidden");
   document.getElementById("apiKeyInput").value = apiKey;
   document.getElementById("modelInput").value = model;
-  document.getElementById("systemPromptInput").value =
-    getCurrentChat()?.systemPrompt || "";
+  document.getElementById("systemPromptInput").value = getCurrentChat()?.systemPrompt||"";
 };
 document.getElementById("closeSettings").onclick = ()=>{
   document.getElementById("settingsModal").classList.add("hidden");
 };
 document.getElementById("saveSettings").onclick = ()=>{
-  apiKey = document.getElementById("apiKeyInput").value.trim();
-  model = document.getElementById("modelInput").value.trim();
-  const sp = document.getElementById("systemPromptInput").value;
-  const chat = getCurrentChat();
-  if(chat) chat.systemPrompt = sp;
+  apiKey=document.getElementById("apiKeyInput").value.trim();
+  model=document.getElementById("modelInput").value.trim();
+  const sp=document.getElementById("systemPromptInput").value;
+  const chat=getCurrentChat();
+  if(chat) chat.systemPrompt=sp;
   localStorage.setItem("apiKey", apiKey);
   localStorage.setItem("model", model);
   saveState();
